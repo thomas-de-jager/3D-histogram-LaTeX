@@ -1,0 +1,170 @@
+\documentclass[class=article]{standalone}
+\usepackage[utf8]{inputenc}
+\usepackage{tikz}
+\usetikzlibrary{calc}
+\usepackage{pgfplots}
+\usepackage{pgfplotstable}
+\pgfplotsset{compat=1.8}
+
+
+% Used to make 3D-histogram
+% from https://tex.stackexchange.com/a/102770/121799
+\def\pgfplotsinvokeiflessthan#1#2#3#4{%
+    \pgfkeysvalueof{/pgfplots/iflessthan/.@cmd}{#1}{#2}{#3}{#4}\pgfeov
+}%
+\def\pgfplotsmulticmpthree#1#2#3#4#5#6\do#7#8{%
+    \pgfplotsset{float <}%
+    \pgfplotsinvokeiflessthan{#1}{#4}{%
+        % first key <:
+        #7%
+    }{%
+        \pgfplotsinvokeiflessthan{#4}{#1}{%
+            % first key >:
+            #8%
+        }{%
+            % first key ==:
+            \pgfplotsset{float <}%
+            \pgfplotsinvokeiflessthan{#2}{#5}{%
+                % second key <
+                #7%
+            }{%
+                \pgfplotsinvokeiflessthan{#5}{#2}{%
+                    % second key >
+                    #8%
+                }{%
+                    % second key ==
+                    \pgfplotsset{float <}%
+                    \pgfplotsinvokeiflessthan{#3}{#6}{%
+                        % third key <
+                        #7%
+                    }{%
+                        % third key >=
+                        #8%
+                    }%
+                }%
+            }%
+        }%
+    }%
+}%
+
+
+
+\begin{document}
+    \ifdefined\gconv
+    \else
+        \pgfmathsetmacro{\gconv}{0.1}
+    \fi
+    
+    \newcommand\maxZValue{10} % manually change this value to max z value in dataset!
+    
+    \pgfplotstableread[col sep=comma,header=true]{%
+        Data/paperYearData.csv%
+    }{\datatable}
+    
+        \pgfplotstablesort[create on use/sortkey/.style={
+            create col/assign/.code={%
+                \edef\entry{{\thisrow{x}}{\thisrow{y}}{\thisrow{myvalue}}}%
+                \pgfkeyslet{/pgfplots/table/create col/next content}\entry
+            }
+        },
+        sort key=sortkey,
+        sort cmp={%
+            iflessthan/.code args={#1#2#3#4}{%
+                \edef\temp{#1#2}%
+                \expandafter\pgfplotsmulticmpthree\temp\do{#3}{#4}%
+            },
+        },
+        sort,
+        columns/Mtx/.style={string type},
+        columns/Kind/.style={string type},]\resulttable{\datatable} {
+    % \small
+
+    \begin{tikzpicture}%[x={(0.866cm,-0.5cm)},y={(0.866cm,0.5cm)},z={(0cm,1 cm)}]
+        \pgfplotsset{set layers}
+        \begin{axis}[% from section 4.6.4 of the pgfplotsmanual
+            view={165}{50},
+            width=440pt, % was: 440pt
+            height=380pt, % was: 380pt
+            z buffer=none,
+            title={Amount of selected papers per category with respect to their publication year},
+            xmin=0,xmax=6,
+            ymin=1999,ymax=2020,
+            ylabel style={align=center},
+            zmin=0,zmax=\maxZValue*2,
+            enlargelimits=upper,
+            ztick={0,3*2,6*2,9*2},
+            zticklabels={0,3,6,9}, % here one has to "cheat"
+            % zticklabels={0,\pgfmathparse{1/3*\maxZValue}\pgfmathresult,\pgfmathparse{2/3*\maxZValue}\pgfmathresult,\pgfmathparse{3/3*\maxZValue}\pgfmathresult}, % here one has to "cheat"
+            % meaning that one has to put labels which are the actual value 
+            % divided by 2. This is because the bars will be centered at these
+            % values
+            xtick=data,
+            xticklabels={Industrial,Tendon,Origami,Metamaterial,Linkage,Compliant},
+            extra tick style={grid=major},
+            % ytick=data,
+            ytick={2000,2005,2010,2015,2020},
+            yticklabels={2000,2005,2010,2015,2020},
+            grid=major, %changes lines on axes (was: minor)
+            major grid style={gray!60},
+            xlabel={Category},
+            ylabel={Year~of\\publication},
+            zlabel={Amount~of~papers},
+            z tick label style={
+                anchor=east}, % used to align label with axis line
+            y tick label style={
+                anchor=east},
+            minor x tick num=0,
+            minor y tick num=4,
+            minor z tick num=3,
+            point meta=explicit,
+            % define the custom colormap. from: https://tex.stackexchange.com/questions/370960/custom-colorbar-not-showing-colors-correctly/370962
+            colormap={my colormap}{
+                rgb=(1, 0, 0),
+                rgb=(1, 1, 0),
+                rgb=(0, 0, 1),
+                rgb=(0.59, 0.29, 0.0),
+                rgb=(0, 1, 0),
+                rgb=(0, 0.5, 0.5),
+            },
+            % colormap name=viridis,
+            scatter/use mapped color={
+                % fill=blue!70!black,fill opacity=.1
+                draw=black,fill=mapped color!80,fill opacity=.75
+                % \definecolorseries{test}{rgb}{step}[rgb]{.95,.85,.55}{.17,.47,.37}
+                % \resetcolorseries{test}
+            },
+            execute at begin plot={}
+            ]
+            \path let \p1=($(axis cs:0,0,1)-(axis cs:0,0,0)$) in 
+            \pgfextra{\pgfmathsetmacro{\conv}{2*\y1}
+            \ifx\gconv\conv
+            \else
+                \xdef\gconv{\conv}
+                \typeout{Please\space recompile\space the\space file!}
+            \fi     
+            };
+            \path let \p1=($(axis cs:1,0,0)-(axis cs:0,0,0)$) in 
+            \pgfextra{\pgfmathsetmacro{\convx}{veclen(\x1,\y1)}
+            \typeout{One\space unit\space in\space x\space direction\space is\space\convx pt}
+            };                  
+            \path let \p1=($(axis cs:0,1,0)-(axis cs:0,0,0)$) in 
+            \pgfextra{\pgfmathsetmacro{\convy}{veclen(\x1,\y1)}
+            \typeout{One\space unit\space in\space y\space direction\space is\space\convy pt}
+            };                  
+            \addplot3 [visualization depends on={\gconv*z \as \myz}, % you may have to recompile to get the prefactor right
+            scatter/@pre marker code/.append style={/pgfplots/cube/size z=\myz},%
+            scatter/@pre marker code/.append style={/pgfplots/cube/size x=12pt},% used to be: x=11.66135pt
+            scatter/@pre marker code/.append style={/pgfplots/cube/size y=6pt},% used to be: y=9.10493pt
+            scatter,only marks,
+            mark=cube*,mark size=5,opacity=1]
+            table[x expr={\thisrow{x}},y expr={\thisrow{y}},z
+            expr={1*\thisrow{myvalue}},
+            meta expr={-1*\thisrow{x}}
+            ] \resulttable;
+        \end{axis}
+        \makeatletter
+            \immediate\write\@mainaux{\xdef\string\gconv{\gconv}\relax}
+        \makeatother
+    \end{tikzpicture}
+    }
+\end{document}
